@@ -1,0 +1,37 @@
+// requires definition of ext.mergeIntoProject to be set to a project name
+
+def mergeFromProject = project
+def taskNamesToRemove = ['sourcesJar','jar','javadocJar','javadoc']
+taskNamesToRemove.each { taskName ->
+    def taskToRemove = tasks.getByPath(taskName)
+    taskToRemove.deleteAllActions()
+    taskToRemove.dependsOn mergeIntoProject."$taskName"
+}
+mergeIntoProject."sourcesJar" {
+    from mergeFromProject.sourcesJar.source
+}
+mergeIntoProject."jar" {
+    from mergeFromProject.jar.source
+}
+mergeIntoProject."javadoc" {
+    source += mergeFromProject.javadoc.source
+    classpath += mergeFromProject.javadoc.classpath
+}
+
+mergeFromProject.configurations.archives.artifacts.clear()
+
+mergeFromProject.configurations.each { config->
+    def mapping = mergeFromProject.conf2ScopeMappings.getMapping([config])
+    if(mapping.scope) {
+        def configName = mergeFromProject.name + "-"+ config.name
+        mergeIntoProject.configurations.add(configName)
+        config.dependencies.each {
+            mergeIntoProject.dependencies.add(configName, it)
+        }
+        configure(mergeIntoProject.install.repositories.mavenInstaller.pom.scopeMappings) {
+            addMapping(mapping.priority + 100, mergeIntoProject.configurations."$configName", mapping.scope)
+        }
+        mergeIntoProject.optionalDeps += mergeFromProject.optionalDeps
+        mergeIntoProject.providedDeps += mergeFromProject.providedDeps
+    }
+}
